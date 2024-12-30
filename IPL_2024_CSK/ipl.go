@@ -1,78 +1,73 @@
 package main
 
 import (
-	"fmt"
-	// "sync"
-	"github.com/gocolly/colly" //import Colly library :)
+    "fmt"
+    "github.com/gin-contrib/cors"
+    "github.com/gin-gonic/gin"
+    "github.com/gocolly/colly"
 )
 
-type Product struct {
-	Url   string
-	Image string
-	Name  string
-	Price string
-}
-
 type Match struct {
-	Title    string 
-	Stadium  string
-	Result   string
+    Title   string `json:"title"`
+    Stadium string `json:"stadium"`
+    Result  string `json:"result"`
 }
 
 func main() {
+    var Matches []Match
+ 
+    r := gin.Default()
 
-	//Our logic starts..
-	var Matches []Match
-	// var visitedUrls sync.Map //hashmap type to store visited urls or not
-	fmt.Println("Hello, World!")
-	c := colly.NewCollector(
-		colly.AllowedDomains("www.cricbuzz.com"),
-	)
+    // Enabling CORS
+    r.Use(cors.New(cors.Config{
+        AllowOrigins:     []string{"http://127.0.0.1:5500"},  
+        AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},  
+        AllowHeaders:     []string{"Content-Type", "Authorization"},
+        AllowCredentials: true,
+    }))
+ 
+    r.GET("/matches", func(c *gin.Context) {
+        if len(Matches) == 0 {
+            c.JSON(500, gin.H{"error": "No match data available"})
+            return
+        }
+        c.JSON(200, Matches)
+    })
+ 
+    go scrapeMatches(&Matches)
 
-	//before every request, yeh callback hoga
-	c.OnRequest(func(r *colly.Request) {
-		fmt.Println("Colly Web-Scraper visiting: ", r.URL)
-	})
+    // Run the Gin web server
+    r.Run(":8080")
+}
 
-	//agar koi error aayega toh
-	c.OnError(func(r *colly.Response, err error) {
-		fmt.Println("Error: ", err)
-	})
+func scrapeMatches(Matches *[]Match) {
+    c := colly.NewCollector(
+        colly.AllowedDomains("www.cricbuzz.com"),
+    )
 
-	//response ko track karke print karega
-	c.OnResponse(func(r *colly.Response) {
-		fmt.Println("Page visited: ", r.Request.URL)
-	})
+    c.OnRequest(func(r *colly.Request) {
+        fmt.Println("Colly Web-Scraper visiting: ", r.URL)
+    })
 
-	// OnHTML callback on matching with li.product
-	c.OnHTML(".cb-series-matches", func(e *colly.HTMLElement) {
-		match := Match{}
-		match.Title = e.ChildText(".cb-col-60.cb-col.cb-srs-mtchs-tm a span") 
-		match.Stadium = e.ChildText(".text-gray")
-		match.Result = e.ChildText(".cb-text-complete")  
-		Matches = append(Matches, match)
-	})
+    c.OnError(func(r *colly.Response, err error) {
+        fmt.Println("Error: ", err)
+    })
 
-	 
+    c.OnResponse(func(r *colly.Response) {
+        fmt.Println("Page visited: ", r.Request.URL)
+    })
 
-	//once job done, print out the array
-	c.OnScraped(func(r *colly.Response) {
-		fmt.Println(r.Request.URL, " scraped!")
-		fmt.Println()
+    c.OnHTML(".cb-series-matches", func(e *colly.HTMLElement) {
+        match := Match{}
+        match.Title = e.ChildText(".cb-col-60.cb-col.cb-srs-mtchs-tm a span")
+        match.Stadium = e.ChildText(".text-gray")
+        match.Result = e.ChildText(".cb-text-complete")
+        *Matches = append(*Matches, match)
+    })
 
-		// Print each product
-		for i, match := range Matches {
-			fmt.Println("Match No:", i+1)
-			fmt.Println("  Title: ", match.Title) 
-			fmt.Println("  Stadium: ", match.Stadium)
-			fmt.Println("  Result: ", match.Result)
-			fmt.Println()
-		}
+    c.OnScraped(func(r *colly.Response) {
+        fmt.Println(r.Request.URL, " scraped!")
+    })
 
-		fmt.Println("Total Matches:", len(Matches))
-		fmt.Println()
-	})
-
-	c.Visit("https://www.cricbuzz.com/cricket-series/7607/indian-premier-league-2024/matches")
-
+    c.Visit("https://www.cricbuzz.com/cricket-series/7607/indian-premier-league-2024/matches")
 }
