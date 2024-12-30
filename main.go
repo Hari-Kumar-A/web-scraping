@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-
+	"sync"
 	"github.com/gocolly/colly" //import Colly library :)
 )
 
@@ -18,7 +18,8 @@ type Product struct{
 func main() {
 
 	//Our logic starts..
-	var products[] Product
+	var products[] Product //array to store Product elements
+	var visitedUrls sync.Map //hashmap type to store visited urls or not
 	fmt.Println("Hello, World!")
 	c := colly.NewCollector(
 		colly.AllowedDomains("www.scrapingcourse.com"),
@@ -50,6 +51,20 @@ func main() {
 		 //insert our product to products
 		 products = append(products, product)
 	})
+
+	// Pagination functionality
+    c.OnHTML("a.next", func(e *colly.HTMLElement) {
+ 
+        nextPageUrl := e.Attr("href") //get the attribute stored in href = "/page/3" aisa
+
+        // check if the nextPageUrl URL has been visited
+	
+        if _, flag := visitedUrls.Load(nextPageUrl); !flag { //if URL not visited
+            fmt.Println("scraping:", nextPageUrl) 
+            visitedUrls.Store(nextPageUrl, struct{}{}) //mark as visited
+            e.Request.Visit(nextPageUrl) //visit this new URL page
+        }
+    })
  
 	//once job done, print out the array
 	c.OnScraped(func(r *colly.Response) {
@@ -57,12 +72,15 @@ func main() {
 		fmt.Println()
 
 		// Print each product
-	for _, product := range products {
-		fmt.Println("Product Details:") 
+	for i, product := range products {
+		fmt.Println("Product Details:", i+1) 
 		fmt.Println("  Name: ", product.Name) 
 		fmt.Println("  Price: ", product.Price)
 		fmt.Println()
 	}
+
+	fmt.Println("Total Products:", len(products))
+	fmt.Println()
 	})
 	
 	c.Visit("https://www.scrapingcourse.com/ecommerce")
